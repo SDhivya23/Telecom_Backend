@@ -1,0 +1,254 @@
+
+CREATE DATABASE telecommanagement;
+USE telecommanagement;
+
+
+-- USERS TABLE
+CREATE TABLE IF NOT EXISTS users (
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    role ENUM('USER', 'ENGINEER', 'ADMIN') NOT NULL,
+    phone VARCHAR(15),
+    address TEXT,
+    security_question VARCHAR(255),
+    security_answer VARCHAR(255),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_email (email)
+) ENGINE=InnoDB;
+
+
+-- ✅ FIXED ENGINEERS TABLE
+CREATE TABLE IF NOT EXISTS engineers (
+    engineer_id INT PRIMARY KEY,   -- same as users.user_id
+    experience INT DEFAULT 0,
+    skill_set VARCHAR(255),
+    status ENUM('AVAILABLE', 'BUSY', 'OFFLINE') DEFAULT 'AVAILABLE',
+    home_lat DOUBLE,
+    home_lng DOUBLE,
+
+    FOREIGN KEY (engineer_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+
+-- USER OTP TABLE (ALREADY CORRECT)
+CREATE TABLE IF NOT EXISTS user_otps (
+    otp_id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(100) NOT NULL,
+    otp VARCHAR(6) NOT NULL,
+    is_verified BOOLEAN DEFAULT FALSE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+
+    INDEX idx_email_verified (email, is_verified),
+    INDEX idx_email_otp (email, otp),
+    INDEX idx_otp_expiry (expires_at)
+) ENGINE=InnoDB;
+
+
+CREATE TABLE holidays (
+    holiday_id INT AUTO_INCREMENT PRIMARY KEY,
+    holiday_date DATE NOT NULL,
+    description VARCHAR(255)
+);
+
+CREATE TABLE tickets (
+    ticket_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    type ENUM('INSTALLATION', 'FAULT') NOT NULL,
+    description TEXT,
+    location VARCHAR(255),
+    latitude DOUBLE,
+    longitude DOUBLE,
+    status ENUM('OPEN', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'DEFERRED') DEFAULT 'OPEN',
+    priority INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- Index for faster searching
+CREATE INDEX idx_ticket_status ON tickets(status);
+
+CREATE TABLE assignments (
+    assignment_id INT AUTO_INCREMENT PRIMARY KEY,
+    ticket_id INT NOT NULL,
+    engineer_id INT NOT NULL,
+    assigned_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('PENDING', 'ACCEPTED', 'REJECTED') DEFAULT 'PENDING',
+    FOREIGN KEY (ticket_id) REFERENCES tickets(ticket_id) ON DELETE CASCADE,
+    FOREIGN KEY (engineer_id) REFERENCES engineers(engineer_id) ON DELETE CASCADE
+);
+
+CREATE TABLE task_updates (
+    update_id INT AUTO_INCREMENT PRIMARY KEY,
+    assignment_id INT NOT NULL,
+    status ENUM('SUCCESS', 'FAILURE', 'DEFERRED') NOT NULL,
+    remarks TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (assignment_id) REFERENCES assignments(assignment_id) ON DELETE CASCADE
+);
+
+CREATE TABLE hazards (
+    hazard_id INT AUTO_INCREMENT PRIMARY KEY,
+    location VARCHAR(255),
+    latitude DOUBLE,
+    longitude DOUBLE,
+    description TEXT,
+    risk_level ENUM('LOW', 'MEDIUM', 'HIGH') NOT NULL,
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE SET NULL
+);
+
+CREATE TABLE notifications (
+    notification_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    message TEXT,
+    status ENUM('SENT', 'FAILED') DEFAULT 'SENT',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+
+CREATE VIEW engineer_workload AS
+SELECT 
+    e.engineer_id,
+    u.name,
+    COUNT(a.assignment_id) AS total_tasks
+FROM engineers e
+JOIN users u ON e.engineer_id = u.user_id
+LEFT JOIN assignments a ON e.engineer_id = a.engineer_id
+GROUP BY e.engineer_id;
+
+
+-- Insert Admin
+INSERT INTO users (name, email, password, role) 
+VALUES ('Admin User', 'admin@sts.com', 'encrypted_pass', 'ADMIN');
+
+-- Insert Engineer
+INSERT INTO users (name, email, password, role)
+VALUES ('Engineer 1', 'eng1@sts.com', 'encrypted_pass', 'ENGINEER');
+
+INSERT INTO engineers (engineer_id, experience, skill_set, home_lat, home_lng)
+VALUES (2, 5, 'Fiber Repair', 12.9716, 77.5946);
+
+-- Insert User
+INSERT INTO users (name, email, password, role)
+VALUES ('User 1', 'user1@gmail.com', 'encrypted_pass', 'USER');
+
+-- Insert Ticket
+INSERT INTO tickets (user_id, type, description, location, latitude, longitude)
+VALUES (3, 'FAULT', 'Internet not working', 'Bangalore', 12.97, 77.59);
+
+-- Assign Ticket
+INSERT INTO assignments (ticket_id, engineer_id)
+VALUES (1, 2);
+
+-- Task Update
+INSERT INTO task_updates (assignment_id, status, remarks)
+VALUES (1, 'SUCCESS', 'Issue fixed');
+
+ALTER TABLE users
+  ADD COLUMN updated_at DATETIME NULL;
+  
+  -- DROP existing tables (careful! This deletes data)
+DROP TABLE IF EXISTS user_otps;
+DROP TABLE IF EXISTS engineers;
+DROP TABLE IF EXISTS users;
+
+-- Then run the CREATE TABLE statements above
+
+ALTER TABLE assignments
+ADD COLUMN assigned_by INT;
+
+
+ALTER TABLE assignments ADD COLUMN assigned_by INT;
+
+ALTER TABLE assignments 
+ADD CONSTRAINT fk_assigned_by 
+FOREIGN KEY (assigned_by) REFERENCES users(user_id);
+
+describe assignments;
+
+ALTER TABLE holidays ADD COLUMN date DATE;
+ALTER TABLE holidays ADD COLUMN engineer_id INT;
+
+ALTER TABLE holidays
+ADD CONSTRAINT fk_engineer_holiday
+FOREIGN KEY (engineer_id)
+REFERENCES engineers(engineer_id);
+
+UPDATE assignments a
+JOIN task_updates t ON a.assignment_id = t.assignment_id
+SET a.status = 'COMPLETED'
+WHERE t.status = 'SUCCESS';
+
+SELECT engineer_id, status
+FROM engineers 
+WHERE engineer_id = 13;
+
+UPDATE engineers
+SET status = 'AVAILABLE' 
+WHERE engineer_id = 14;
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+TRUNCATE TABLE task_updates;
+TRUNCATE TABLE assignments;
+TRUNCATE TABLE tickets;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+UPDATE tickets
+SET status = 'COMPLETED'
+WHERE ticket_id = 17;
+
+UPDATE tickets
+SET status = 'COMPLETED'
+WHERE ticket_id = 18;
+
+ALTER TABLE tickets ADD COLUMN admin_id INT;
+
+ALTER TABLE tickets
+ADD CONSTRAINT fk_admin
+FOREIGN KEY (admin_id) REFERENCES users(user_id);
+
+DELETE FROM tickets;
+
+SET SQL_SAFE_UPDATES = 0;
+SET SQL_SAFE_UPDATES = 1;
+ALTER TABLE tickets AUTO_INCREMENT = 1;
+
+UPDATE engineers
+SET status = 'AVAILABLE'
+WHERE engineer_id = 13;
+
+describe tickets;
+
+ALTER TABLE tickets
+    ADD COLUMN admin_id INT NULL AFTER user_id;
+
+ALTER TABLE tickets
+    ADD CONSTRAINT fk_ticket_admin
+    FOREIGN KEY (admin_id) REFERENCES users(user_id) ON DELETE SET NULL;
+
+ALTER TABLE tickets
+    ADD INDEX idx_ticket_admin (admin_id),
+    ADD INDEX idx_ticket_admin_status (admin_id, status);
+
+SELECT * FROM users
+WHERE user_id = 18;
+
+DELETE FROM users
+WHERE user_id = 22;
+
+SELECT email, COUNT(*)
+FROM user_otps
+WHERE is_verified = true
+GROUP BY email
+HAVING COUNT(*) > 1;
+
+
+
